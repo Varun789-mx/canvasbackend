@@ -5,9 +5,6 @@ import { GetObjectCommand, ListObjectsV2Command, S3, S3Client } from "@aws-sdk/c
 import { Readable } from "node:stream";
 const app = express();
 import dotenv from "dotenv";
-import path from "node:path";
-import { buffer } from "node:stream/consumers";
-import { it } from "node:test";
 dotenv.config();
 
 app.use(express.json());
@@ -85,12 +82,11 @@ app.get('/sucker', async (req, res) => {
         for (const item of listResponse.Contents) {
             //if the items.key like the name of the file exists and it doesn't start with the / idk why the / part 
             if (item.Key) {
-                if (item.Key && !item.Key.endsWith('/')) {
+                if (item.Key.endsWith('/')) {
                     //then we create a command to fetch the files from the bucket and put the bucketnane and file name as key here
                     files.push({
                         name: item.Key.replace(`${base}/`, ''),
                         type: 'folder',
-                        items: []
                     })
                 } else {
                     const getCommand = new GetObjectCommand({
@@ -111,7 +107,7 @@ app.get('/sucker', async (req, res) => {
                     const content = Buffer.concat(chunks).toString('utf-8');
                     //here we push that chunk into the files array
                     files.push({
-                        name: item.Key.replace(`${base}`, ''),
+                        name: item.Key.replace(`${base}/`, ''),
                         type: 'file',
                         content: content,
                     })

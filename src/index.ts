@@ -6,6 +6,8 @@ import { Readable } from "node:stream";
 const app = express();
 import dotenv from "dotenv";
 import path from "node:path";
+import { buffer } from "node:stream/consumers";
+import { it } from "node:test";
 dotenv.config();
 
 app.use(express.json());
@@ -52,7 +54,6 @@ app.get('/download', async (req, res) => {
                 })
             }
         }
-        console.log({ files });
         res.json({ files });
 
     } catch (error) {
@@ -60,39 +61,68 @@ app.get('/download', async (req, res) => {
             Error: "Internal server error" + error,
         })
     }
+})
+
+app.get('/sucker', async (req, res) => {
+    //this get's the name of the base files like react or node js depending on the project 
+    const base = req.query.path;
     try {
-        const listCommand = new ListObjectsV2Command({
+        //we create a command for getting the contents where we add the bucketname and the prefix to find it 
+        const listcontent = new ListObjectsV2Command({
             Bucket: process.env.BUCKET_NAME,
-            Prefix: `${base}/`
+            Prefix: `${base}/`,
         })
-        const listResponse = await r2Client.send(listCommand);
+        //then we send the command and get it's output in the listreponse
+        const listResponse = await r2Client.send(listcontent);
+        //if it doens't exist then we return the request with a message error in this case
         if (!listResponse.Contents || listResponse.Contents.length === 0) {
-            return res.status(404).json("File not found")
+            return res.status(400).json({
+                message: "could't get the files",
+            })
         }
+        //we create an array for files
         const files = [];
-        for (const items of listResponse.Contents) {
-            if (!items.Key || !items.Key.endsWith('/')) {
-                const getCommand = new GetObjectCommand({
-                    Bucket: process.env.BUCKET_NAME,
-                    Key: items.Key,
-                })
-                const fileResponse = await r2Client.send(getCommand);
-                const stream = fileResponse.Body as Readable;
-                const chunks: Buffer[] = [];
-                for await (const chunk of stream) {
-                    chunks.push(Buffer.from(chunk));
+        for (const item of listResponse.Contents) {
+            //if the items.key like the name of the file exists and it doesn't start with the / idk why the / part 
+            if (item.Key) {
+                if (item.Key && !item.Key.endsWith('/')) {
+                    //then we create a command to fetch the files from the bucket and put the bucketnane and file name as key here
+                    files.push({
+                        name: item.Key.replace(`${base}/`, ''),
+                        type: 'folder',
+                        items: []
+                    })
+                } else {
+                    const getCommand = new GetObjectCommand({
+                        Bucket: process.env.BUCKET_NAME,
+                        Key: item.Key,
+                    })
+                    //here we send the command using the r2client
+                    const fileResponse = await r2Client.send(getCommand);
+                    //now creating a variable to store the response's body as a readable stream data;
+                    const stream = fileResponse.Body as Readable
+                    //creating an variable array for storing the chunks of data;
+                    const chunks: Buffer[] = [];
+                    //adding the streams's data to the chunks array idk why Buffer.from(chunk ) part
+                    for await (const chunk of stream) {
+                        chunks.push(Buffer.from(chunk));
+                    }
+                    //also don't know why this i just understand the we convert the buffer's data to a sting 'utf-8' format here but why the concat here idk
+                    const content = Buffer.concat(chunks).toString('utf-8');
+                    //here we push that chunk into the files array
+                    files.push({
+                        name: item.Key.replace(`${base}`, ''),
+                        type: 'file',
+                        content: content,
+                    })
                 }
-                const content = Buffer.concat(chunks)?.toString('utf8');
-                files.push({
-                    path: items.Key?.replace(`${base}`, 'utf-8'),
-                    content: content
-                })
             }
         }
-
-    }
-    catch (error) {
-
+        res.send({ files });
+    } catch (error) {
+        return res.send(500).json({
+            error: "Internal server error" + error,
+        })
     }
 })
 

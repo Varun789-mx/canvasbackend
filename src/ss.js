@@ -1,1 +1,0 @@
-DO $$ DECLARE returned_user_id INT; BEGIN--Inset 5 users  FOR i IN 1..5 LOOP INSERT INTO users(email, password, name) VALUES('user' || i || '@example.com', 'pass' || i, 'User ' || i) RETURNING ID INTO returned_user_id;FOR j IN 1..50000 LOOP INSERT INTO posts(ID, title, description) VALUES(returned_user_id, 'Title`||j,) END LOOP; END LOOP; END $$ DO
